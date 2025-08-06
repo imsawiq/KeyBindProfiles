@@ -1,5 +1,0 @@
-v1	named	intermediary
-FIELD	org/sawiq/keybindprofiles/mixin/ScreenMixin	Lnet/minecraft/client/MinecraftClient;	client	field_22787
-FIELD	org/sawiq/keybindprofiles/mixin/ScreenMixin	I	height	field_22790
-FIELD	org/sawiq/keybindprofiles/mixin/ScreenMixin	I	width	field_22789
-METHOD	org/sawiq/keybindprofiles/mixin/ScreenMixin	(Lnet/minecraft/client/gui/Element;)Lnet/minecraft/client/gui/Element;	addDrawableChild	method_37063

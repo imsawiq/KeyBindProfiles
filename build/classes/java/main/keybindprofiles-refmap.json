@@ -1,0 +1,14 @@
+{
+  "mappings": {
+    "org/sawiq/keybindprofiles/mixin/ScreenMixin": {
+      "init(Lnet/minecraft/client/MinecraftClient;II)V": "Lnet/minecraft/class_437;method_25423(Lnet/minecraft/class_310;II)V"
+    }
+  },
+  "data": {
+    "named:intermediary": {
+      "org/sawiq/keybindprofiles/mixin/ScreenMixin": {
+        "init(Lnet/minecraft/client/MinecraftClient;II)V": "Lnet/minecraft/class_437;method_25423(Lnet/minecraft/class_310;II)V"
+      }
+    }
+  }
+}

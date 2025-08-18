@@ -228,8 +228,10 @@ public class KeyBindProfileScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         //бг
-        this.renderBackground(context, mouseX, mouseY, delta);
-        context.fill((width - BUTTON_WIDTH) / 2 - 5, START_Y - 5, (width + BUTTON_WIDTH) / 2 + 5, height - 130 + 5, 0x40000000);
+        context.fill((width - BUTTON_WIDTH) / 2 - 5, START_Y - 5,
+                (width + BUTTON_WIDTH) / 2 + 5, height - FOOTER_HEIGHT + 5,
+                0x40000000);
+
         super.render(context, mouseX, mouseY, delta);
         String currentProfileName = KeyBindProfiles.getCurrentProfile();
         Text fullProfileText;
@@ -238,6 +240,6 @@ public class KeyBindProfileScreen extends Screen {
         } else {
             fullProfileText = Text.translatable("keybindprofiles.applied_profile", Text.translatable("options.off"));
         }
-        context.drawText(textRenderer, fullProfileText, 10, 10, 0xFFFFFF, false);
+        context.drawTextWithShadow(textRenderer, fullProfileText, 10, 10, 0xFFFFFF);
     }
 }

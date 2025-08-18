@@ -1,0 +1,6 @@
+# Исключить Gradle артефакты
+/build/
+/.gradle/
+/out/
+/.idea/
+/*.iml

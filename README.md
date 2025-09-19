@@ -1,3 +1,5 @@
+https://modrinth.com/mod/keybindprofiles
+
 # English:
 
 **KeyBindProfiles** is a client-side Fabric mod for Minecraft that allows you to create and manage multiple sets of keybindings _(profiles)_.

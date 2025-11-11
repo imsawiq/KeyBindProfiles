@@ -1,11 +1,12 @@
 {
-	"required": true,
-	"package": "org.sawiq.keybindprofiles.mixin",
-	"compatibilityLevel": "JAVA_21",
-	"client": [
-      "ScreenMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	}
+  "required": true,
+  "package": "org.sawiq.keybindprofiles.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ScreenMixin",
+    "HudMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

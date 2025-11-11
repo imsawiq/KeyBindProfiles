@@ -7,7 +7,9 @@
   "keybindprofiles.apply": "Применить Профиль",
   "keybindprofiles.rename": "Переименовать Профиль",
   "keybindprofiles.delete": "Удалить Профиль",
+  "keybindprofiles.export": "Экспорт Всех Профилей",
   "keybindprofiles.open": "Управление Профилями",
   "key.keybindprofiles.open": "Открыть Профили Привязок Клавиш",
-  "keybindprofiles.applied_profile": "Установленный профиль: %s"
+  "keybindprofiles.applied_profile": "Установленный профиль: %s",
+  "keybindprofiles.hotkey_hint": "Нажмите 1-2 клавиши, затем ENTER для сохранения, BACKSPACE для очистки, ESC для отмены"
 }

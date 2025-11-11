@@ -18,8 +18,8 @@ If you play in different styles _(e.g., building, survival, PvP)_, you likely ha
 
 ## Future versions plan to add:
 
-- **Hotkey assignment to profiles** — Assign hotkeys for quick switching between profiles.
-- **Import/Export profiles** — Share your settings with friends or transfer them between different installations.
+~~- **Hotkey assignment to profiles** — Assign hotkeys for quick switching between profiles.~~
+~~- **Import/Export profiles** — Share your settings with friends or transfer them between different installations.~~
 - **Search and filter profiles** — Quickly find the profile you need in a long list.
 - **"On-the-fly" profile editor** — Edit saved profiles directly from the manager without applying them.
 - **Context-dependent profiles _(Auto-switching)_** — Automatically switch profiles based on certain conditions _(e.g., joining a server)_.
@@ -43,8 +43,8 @@ If you play in different styles _(e.g., building, survival, PvP)_, you likely ha
 
 ## В будущих версиях планируется добавить:
 
-- **Привязка горячих клавиш к профилям** — Назначайте горячие клавиши для быстрого переключения между профилями.
-- **Импорт/Экспорт профилей** — Делитесь своими настройками с друзьями или переносите их между разными установками.
+~~- **Привязка горячих клавиш к профилям** — Назначайте горячие клавиши для быстрого переключения между профилями.~~
+~~- **Импорт/Экспорт профилей** — Делитесь своими настройками с друзьями или переносите их между разными установками.~~
 - **Поиск и фильтрация профилей** — Быстро находите нужный профиль в длинном списке.
 - **Редактор профиля "на лету"** — Изменяйте сохраненные профили прямо из менеджера, не применяя их.
 - **Контекстно-зависимые профили (Автопереключение)** — Автоматическое переключение профилей при определенных условиях _(например, при входе на сервер)_.

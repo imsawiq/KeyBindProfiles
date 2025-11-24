@@ -1,5 +1,5 @@
 {
-  "keybindprofiles.title": "Key Bind Profiles",
+  "keybindprofiles.title": "KeyBind Profiles",
   "keybindprofiles.category": "Profiles",
   "keybindprofiles.config_description": "Manage your key binding profiles.",
   "keybindprofiles.profile_name": "Profile Name",
@@ -7,7 +7,9 @@
   "keybindprofiles.apply": "Apply Profile",
   "keybindprofiles.rename": "Rename Profile",
   "keybindprofiles.delete": "Delete Profile",
+  "keybindprofiles.export": "Export All Profiles",
   "keybindprofiles.open": "Manage Profiles",
   "key.keybindprofiles.open": "Open Key Bind Profiles",
-  "keybindprofiles.applied_profile": "Applied profile: %s"
+  "keybindprofiles.applied_profile": "Applied profile: %s",
+  "keybindprofiles.hotkey_hint": "Press 1-2 keys, then ENTER to save, BACKSPACE to clear, ESC to cancel"
 }

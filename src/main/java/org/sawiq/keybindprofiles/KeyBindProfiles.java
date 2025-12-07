@@ -11,7 +11,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
 import org.sawiq.keybindprofiles.gui.KeyBindProfileScreen;
 
 import java.awt.Desktop;
@@ -20,12 +19,11 @@ import java.lang.reflect.Type;
 import java.util.*;
 
 public class KeyBindProfiles implements ClientModInitializer {
-    public static final String MOD_ID = "keybindprofiles";
-
     // тут все профили и их кейбинды
     public static final Map<String, Map<String, String>> PROFILES = new HashMap<>();
+
     // тут горячие клавиши для профилей
-    public static final Map<String, java.util.List<Integer>> PROFILE_HOTKEYS = new HashMap<>();
+    public static final Map<String, List<Integer>> PROFILE_HOTKEYS = new HashMap<>();
 
     private static File profilesDir;
     private static File currentProfileFile;
@@ -48,7 +46,7 @@ public class KeyBindProfiles implements ClientModInitializer {
                 "key.keybindprofiles.open",
                 InputUtil.Type.KEYSYM,
                 InputUtil.GLFW_KEY_O,
-                "key.categories.misc"
+                KeyBinding.Category.MISC
         ));
 
         // каждый тик проверяем нажатия
@@ -56,7 +54,6 @@ public class KeyBindProfiles implements ClientModInitializer {
             while (openProfileScreenKey.wasPressed()) {
                 openConfigScreen(null);
             }
-
             checkProfileHotkeys();
         });
 
@@ -75,23 +72,21 @@ public class KeyBindProfiles implements ClientModInitializer {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.player == null) return;
 
-        for (Map.Entry<String, java.util.List<Integer>> entry : PROFILE_HOTKEYS.entrySet()) {
+        for (Map.Entry<String, List<Integer>> entry : PROFILE_HOTKEYS.entrySet()) {
             String profileName = entry.getKey();
-            java.util.List<Integer> keys = entry.getValue();
-
+            List<Integer> keys = entry.getValue();
             if (keys == null || keys.isEmpty()) continue;
 
             // все клавиши нажаты?
             boolean allPressed = true;
             for (Integer keyCode : keys) {
-                if (!InputUtil.isKeyPressed(client.getWindow().getHandle(), keyCode)) {
+                if (!InputUtil.isKeyPressed(client.getWindow(), keyCode)) {
                     allPressed = false;
                     break;
                 }
             }
 
-            String hotkeyId = profileName + "_" + keys.toString();
-
+            String hotkeyId = profileName + "_" + keys;
             if (allPressed) {
                 // применяем только если еще не нажимали и это не текущий профиль
                 if (!pressedHotkeys.contains(hotkeyId) && !profileName.equals(currentProfile)) {
@@ -129,10 +124,13 @@ public class KeyBindProfiles implements ClientModInitializer {
     private static File getProfilesDir() {
         if (profilesDir == null) {
             MinecraftClient client = MinecraftClient.getInstance();
-            if (client != null && client.runDirectory != null) {
+            if (client.runDirectory != null) {
                 profilesDir = new File(client.runDirectory, "config/keybindprofiles");
                 if (!profilesDir.exists()) {
-                    profilesDir.mkdirs();
+                    boolean created = profilesDir.mkdirs();
+                    if (!created) {
+                        System.err.println("Failed to create profiles directory");
+                    }
                 }
             }
         }
@@ -161,26 +159,26 @@ public class KeyBindProfiles implements ClientModInitializer {
                 try (FileReader reader = new FileReader(file)) {
                     Type type = new TypeToken<Map<String, Object>>(){}.getType();
                     Map<String, Object> data = GSON.fromJson(reader, type);
+
                     if (data != null && data.containsKey("name") && data.containsKey("keybindings")) {
                         String name = (String) data.get("name");
                         @SuppressWarnings("unchecked")
                         Map<String, String> bindings = (Map<String, String>) data.get("keybindings");
-
                         PROFILES.put(name, bindings);
 
                         // грузим hotkeys если есть
-                        if (data.containsKey("hotkeys") && data.get("hotkeys") instanceof java.util.List) {
+                        if (data.containsKey("hotkeys") && data.get("hotkeys") instanceof List<?>) {
                             @SuppressWarnings("unchecked")
-                            java.util.List<Double> hotkeys = (java.util.List<Double>) data.get("hotkeys");
-                            java.util.List<Integer> intKeys = new ArrayList<>();
+                            List<Double> hotkeys = (List<Double>) data.get("hotkeys");
+                            List<Integer> intKeys = new ArrayList<>();
                             for (Double d : hotkeys) {
                                 intKeys.add(d.intValue());
                             }
                             PROFILE_HOTKEYS.put(name, intKeys);
                         }
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
+                } catch (IOException e) {
+                    System.err.println("Failed to load profile from " + file.getName() + ": " + e.getMessage());
                 }
             }
         }
@@ -201,9 +199,10 @@ public class KeyBindProfiles implements ClientModInitializer {
         Map<String, String> keyMap = new HashMap<>();
         for (KeyBinding binding : bindings) {
             if (binding != null) {
-                keyMap.put(binding.getTranslationKey(), binding.getBoundKeyTranslationKey());
+                keyMap.put(binding.getId(), binding.getBoundKeyTranslationKey());
             }
         }
+
         PROFILES.put(name, keyMap);
         exportProfile(name);
     }
@@ -214,12 +213,12 @@ public class KeyBindProfiles implements ClientModInitializer {
         if (keyMap == null) return;
 
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.options == null) return;
+        if (client.options == null) return;
 
         // меняем все кейбинды
         for (KeyBinding binding : client.options.allKeys) {
             if (binding != null) {
-                String savedKey = keyMap.get(binding.getTranslationKey());
+                String savedKey = keyMap.get(binding.getId());
                 if (savedKey != null) {
                     try {
                         InputUtil.Key inputKey = InputUtil.fromTranslationKey(savedKey);
@@ -233,11 +232,7 @@ public class KeyBindProfiles implements ClientModInitializer {
         KeyBinding.updateKeysByCode();
 
         // сохраняем в options.txt
-        try {
-            client.options.write();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        client.options.write();
 
         currentProfile = name;
         saveCurrentProfile(name);
@@ -246,19 +241,23 @@ public class KeyBindProfiles implements ClientModInitializer {
     // удалить профиль
     public static void deleteProfile(String name) {
         Objects.requireNonNull(name, "Profile name cannot be null");
+
         if (PROFILES.remove(name) != null) {
             PROFILE_HOTKEYS.remove(name);
             if (currentProfile != null && currentProfile.equals(name)) {
                 currentProfile = null;
                 saveCurrentProfile(null);
             }
+        }
 
-            // удаляем .kbp файл
-            File dir = getProfilesDir();
-            if (dir != null) {
-                File file = new File(dir, name + ".kbp");
-                if (file.exists()) {
-                    file.delete();
+        // удаляем .kbp файл
+        File dir = getProfilesDir();
+        if (dir != null) {
+            File file = new File(dir, name + ".kbp");
+            if (file.exists()) {
+                boolean deleted = file.delete();
+                if (!deleted) {
+                    System.err.println("Failed to delete profile file: " + file.getName());
                 }
             }
         }
@@ -285,12 +284,12 @@ public class KeyBindProfiles implements ClientModInitializer {
         try (FileWriter writer = new FileWriter(exportFile)) {
             GSON.toJson(exportData, writer);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Failed to export profile " + name + ": " + e.getMessage());
         }
     }
 
     // установить горячую клавишу для профиля
-    public static void setProfileHotkey(String profileName, java.util.List<Integer> keys) {
+    public static void setProfileHotkey(String profileName, List<Integer> keys) {
         if (keys == null || keys.isEmpty()) {
             PROFILE_HOTKEYS.remove(profileName);
         } else {
@@ -299,7 +298,7 @@ public class KeyBindProfiles implements ClientModInitializer {
         exportProfile(profileName);
     }
 
-    public static java.util.List<Integer> getProfileHotkey(String profileName) {
+    public static List<Integer> getProfileHotkey(String profileName) {
         return PROFILE_HOTKEYS.get(profileName);
     }
 
@@ -317,7 +316,7 @@ public class KeyBindProfiles implements ClientModInitializer {
         try (FileWriter writer = new FileWriter(file)) {
             writer.write(profile != null ? profile : "");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Failed to save current profile: " + e.getMessage());
         }
     }
 
@@ -332,7 +331,7 @@ public class KeyBindProfiles implements ClientModInitializer {
             String line = reader.readLine();
             return (line != null && !line.trim().isEmpty()) ? line.trim() : null;
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Failed to load current profile: " + e.getMessage());
             return null;
         }
     }
@@ -346,12 +345,33 @@ public class KeyBindProfiles implements ClientModInitializer {
         File dir = getProfilesDir();
         if (dir == null) return;
 
-        try {
-            if (Desktop.isDesktopSupported()) {
-                Desktop.getDesktop().open(dir);
+        if (!dir.exists()) {
+            boolean created = dir.mkdirs();
+            if (!created) {
+                System.err.println("Failed to create profiles directory");
+                return;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        }
+
+        try {
+            String os = System.getProperty("os.name").toLowerCase();
+
+            if (os.contains("win")) {
+                // Windows
+                Runtime.getRuntime().exec(new String[]{"explorer.exe", dir.getAbsolutePath()});
+            } else if (os.contains("mac")) {
+                // macOS
+                Runtime.getRuntime().exec(new String[]{"open", dir.getAbsolutePath()});
+            } else if (os.contains("nix") || os.contains("nux")) {
+                // Linux
+                Runtime.getRuntime().exec(new String[]{"xdg-open", dir.getAbsolutePath()});
+            } else {
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(dir);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to open profiles folder: " + e.getMessage());
         }
     }
 }

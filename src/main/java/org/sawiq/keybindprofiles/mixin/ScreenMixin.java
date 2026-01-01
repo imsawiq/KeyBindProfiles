@@ -1,6 +1,5 @@
 package org.sawiq.keybindprofiles.mixin;
 
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.Selectable;
 import net.minecraft.client.gui.screen.Screen;
@@ -17,29 +16,29 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
+
     @Unique
     private boolean buttonAdded = false;
 
     @Shadow
     protected abstract <T extends Element & Selectable> T addDrawableChild(T drawableElement);
 
-    @Inject(method = "init(Lnet/minecraft/client/MinecraftClient;II)V", at = @At("TAIL"), require = 0)
-    private void init(MinecraftClient client, int width, int height, CallbackInfo ci) {
-        if (client == null || buttonAdded) {
-            return;
-        }
+    @Inject(method = "init(II)V", at = @At("TAIL"), require = 0)
+    private void keybindprofiles$init(int width, int height, CallbackInfo ci) {
+        if (buttonAdded) return;
 
         Screen thisScreen = (Screen) (Object) this;
-        if (thisScreen instanceof KeybindsScreen) {
-            int buttonX = width / 2 - 155 - 8 - 150;
-            int buttonY = height - 26;
+        if (!(thisScreen instanceof KeybindsScreen)) return;
 
-            ButtonWidget profileButton = ButtonWidget.builder(Text.translatable("keybindprofiles.open"), button ->
-                    KeyBindProfiles.openConfigScreen(thisScreen)
-            ).dimensions(buttonX, buttonY, 150, 20).build();
+        int buttonX = width / 2 - 155 - 8 - 150;
+        int buttonY = height - 26;
 
-            addDrawableChild(profileButton);
-            buttonAdded = true;
-        }
+        ButtonWidget profileButton = ButtonWidget.builder(
+                Text.translatable("keybindprofiles.open"),
+                button -> KeyBindProfiles.openConfigScreen(thisScreen)
+        ).dimensions(buttonX, buttonY, 150, 20).build();
+
+        addDrawableChild(profileButton);
+        buttonAdded = true;
     }
 }

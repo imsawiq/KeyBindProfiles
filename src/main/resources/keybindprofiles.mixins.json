@@ -3,7 +3,9 @@
   "package": "org.sawiq.keybindprofiles.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "ScreenInvoker",
     "ScreenMixin",
+    "KeybindsScreenRenderMixin",
     "HudMixin"
   ],
   "injectors": {

@@ -1,6 +1,7 @@
 package org.sawiq.keybindprofiles.gui;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.option.KeybindsScreen;
@@ -31,7 +32,7 @@ public class KeyBindProfileScreen extends Screen {
     private static final int FOOTER_HEIGHT = 90;
 
     private String capturingHotkeyFor = null;
-    private final List<Integer> capturedKeys = new ArrayList<>();
+    private final List<String> capturedKeys = new ArrayList<>();
 
     // класс для хранения пары кнопок профиля
     private static class ProfileButtonPair {
@@ -122,7 +123,7 @@ public class KeyBindProfileScreen extends Screen {
                     Map<String, String> keyMap = KeyBindProfiles.PROFILES.get(selectedProfile);
                     if (keyMap != null) {
                         // сохраняем hotkeys
-                        List<Integer> hotkeys = KeyBindProfiles.getProfileHotkey(selectedProfile);
+                        List<String> hotkeys = KeyBindProfiles.getProfileHotkey(selectedProfile);
 
                         KeyBindProfiles.deleteProfile(selectedProfile);
 
@@ -214,8 +215,7 @@ public class KeyBindProfileScreen extends Screen {
             }
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < capturedKeys.size(); i++) {
-                KeyInput keyInput = new KeyInput(capturedKeys.get(i), -1, 0);
-                sb.append(InputUtil.fromKeyCode(keyInput).getLocalizedText().getString());
+                sb.append(InputUtil.fromTranslationKey(capturedKeys.get(i)).getLocalizedText().getString());
                 if (i < capturedKeys.size() - 1) {
                     sb.append("+");
                 }
@@ -224,15 +224,14 @@ public class KeyBindProfileScreen extends Screen {
         }
 
         // показываем текущие hotkeys
-        List<Integer> keys = KeyBindProfiles.getProfileHotkey(profileName);
+        List<String> keys = KeyBindProfiles.getProfileHotkey(profileName);
         if (keys == null || keys.isEmpty()) {
             return Text.literal("-");
         }
 
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < keys.size(); i++) {
-            KeyInput keyInput = new KeyInput(keys.get(i), -1, 0);
-            sb.append(InputUtil.fromKeyCode(keyInput).getLocalizedText().getString());
+            sb.append(InputUtil.fromTranslationKey(keys.get(i)).getLocalizedText().getString());
             if (i < keys.size() - 1) {
                 sb.append("+");
             }
@@ -275,14 +274,28 @@ public class KeyBindProfileScreen extends Screen {
             }
 
             // добавляем клавишу (макс 2)
-            if (!capturedKeys.contains(keyCode) && capturedKeys.size() < 2) {
-                capturedKeys.add(keyCode);
+            String translationKey = InputUtil.fromKeyCode(input).getTranslationKey();
+            if (!capturedKeys.contains(translationKey) && capturedKeys.size() < 2) {
+                capturedKeys.add(translationKey);
                 refreshProfileList();
             }
             return true;
         }
 
         return super.keyPressed(input);
+    }
+
+    @Override
+    public boolean mouseClicked(Click click, boolean bl) {
+        if (capturingHotkeyFor != null) {
+            String translationKey = InputUtil.Type.MOUSE.createFromCode(click.button()).getTranslationKey();
+            if (!capturedKeys.contains(translationKey) && capturedKeys.size() < 2) {
+                capturedKeys.add(translationKey);
+                refreshProfileList();
+            }
+            return true;
+        }
+        return super.mouseClicked(click, bl);
     }
 
     // обновить список профилей

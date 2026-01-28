@@ -8,10 +8,12 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import org.sawiq.keybindprofiles.gui.KeyBindProfileScreen;
+import org.lwjgl.glfw.GLFW;
 
 import java.awt.Desktop;
 import java.io.*;
@@ -23,7 +25,7 @@ public class KeyBindProfiles implements ClientModInitializer {
     public static final Map<String, Map<String, String>> PROFILES = new HashMap<>();
 
     // тут горячие клавиши для профилей
-    public static final Map<String, List<Integer>> PROFILE_HOTKEYS = new HashMap<>();
+    public static final Map<String, List<String>> PROFILE_HOTKEYS = new HashMap<>();
 
     private static File profilesDir;
     private static File currentProfileFile;
@@ -72,15 +74,15 @@ public class KeyBindProfiles implements ClientModInitializer {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.player == null) return;
 
-        for (Map.Entry<String, List<Integer>> entry : PROFILE_HOTKEYS.entrySet()) {
+        for (Map.Entry<String, List<String>> entry : PROFILE_HOTKEYS.entrySet()) {
             String profileName = entry.getKey();
-            List<Integer> keys = entry.getValue();
+            List<String> keys = entry.getValue();
             if (keys == null || keys.isEmpty()) continue;
 
             // все клавиши нажаты?
             boolean allPressed = true;
-            for (Integer keyCode : keys) {
-                if (!InputUtil.isKeyPressed(client.getWindow(), keyCode)) {
+            for (String translationKey : keys) {
+                if (!isHotkeyPressed(client, translationKey)) {
                     allPressed = false;
                     break;
                 }
@@ -99,6 +101,24 @@ public class KeyBindProfiles implements ClientModInitializer {
                 pressedHotkeys.remove(hotkeyId);
             }
         }
+    }
+
+    private static boolean isHotkeyPressed(MinecraftClient client, String translationKey) {
+        if (translationKey == null || translationKey.isEmpty()) return false;
+        InputUtil.Key key;
+        try {
+            key = InputUtil.fromTranslationKey(translationKey);
+        } catch (Exception e) {
+            return false;
+        }
+
+        if (key == null) return false;
+
+        if (key.getCategory() == InputUtil.Type.MOUSE) {
+            return GLFW.glfwGetMouseButton(client.getWindow().getHandle(), key.getCode()) == GLFW.GLFW_PRESS;
+        }
+
+        return InputUtil.isKeyPressed(client.getWindow(), key.getCode());
     }
 
     // показать уведомление
@@ -169,12 +189,19 @@ public class KeyBindProfiles implements ClientModInitializer {
                         // грузим hotkeys если есть
                         if (data.containsKey("hotkeys") && data.get("hotkeys") instanceof List<?>) {
                             @SuppressWarnings("unchecked")
-                            List<Double> hotkeys = (List<Double>) data.get("hotkeys");
-                            List<Integer> intKeys = new ArrayList<>();
-                            for (Double d : hotkeys) {
-                                intKeys.add(d.intValue());
+                            List<Object> hotkeys = (List<Object>) data.get("hotkeys");
+                            List<String> hotkeyKeys = new ArrayList<>();
+                            for (Object o : hotkeys) {
+                                if (o instanceof String) {
+                                    hotkeyKeys.add((String) o);
+                                } else if (o instanceof Number) {
+                                    int code = ((Number) o).intValue();
+                                    hotkeyKeys.add(InputUtil.fromKeyCode(new KeyInput(code, -1, 0)).getTranslationKey());
+                                }
                             }
-                            PROFILE_HOTKEYS.put(name, intKeys);
+                            if (!hotkeyKeys.isEmpty()) {
+                                PROFILE_HOTKEYS.put(name, hotkeyKeys);
+                            }
                         }
                     }
                 } catch (IOException e) {
@@ -289,7 +316,7 @@ public class KeyBindProfiles implements ClientModInitializer {
     }
 
     // установить горячую клавишу для профиля
-    public static void setProfileHotkey(String profileName, List<Integer> keys) {
+    public static void setProfileHotkey(String profileName, List<String> keys) {
         if (keys == null || keys.isEmpty()) {
             PROFILE_HOTKEYS.remove(profileName);
         } else {
@@ -298,7 +325,7 @@ public class KeyBindProfiles implements ClientModInitializer {
         exportProfile(profileName);
     }
 
-    public static List<Integer> getProfileHotkey(String profileName) {
+    public static List<String> getProfileHotkey(String profileName) {
         return PROFILE_HOTKEYS.get(profileName);
     }
 

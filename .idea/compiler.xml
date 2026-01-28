@@ -3,4 +3,10 @@
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel target="21" />
   </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_STRING" value="-AoutRefMapFile=C:\Users\Сашка\Documents\перенос\plugins\KeyBindProfiles\build\classes\java\main\keybindprofiles-refmap.json -AdefaultObfuscationEnv=named:intermediary -Aquiet=true -AoutMapFileNamedIntermediary=C:\Users\Сашка\Documents\перенос\plugins\KeyBindProfiles\build\loom-cache\mixin-map-net.fabricmc.yarn.1_21.1.21+build.9-v2.main.tiny -AinMapFileNamedIntermediary=C:\Users\Сашка\.gradle\caches\fabric-loom\1.21\net.fabricmc.yarn.1_21.1.21+build.9-v2\mappings.tiny" />
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="KeyBindProfiles.test" options="-AoutRefMapFile=C:\Users\Сашка\Documents\перенос\plugins\KeyBindProfiles\build\classes\java\test\test-keybindprofiles-refmap.json -AdefaultObfuscationEnv=named:intermediary -Aquiet=true -AoutMapFileNamedIntermediary=C:\Users\Сашка\Documents\перенос\plugins\KeyBindProfiles\build\loom-cache\mixin-map-net.fabricmc.yarn.1_21.1.21+build.9-v2.test.tiny -AinMapFileNamedIntermediary=C:\Users\Сашка\.gradle\caches\fabric-loom\1.21\net.fabricmc.yarn.1_21.1.21+build.9-v2\mappings.tiny" />
+    </option>
+  </component>
 </project>

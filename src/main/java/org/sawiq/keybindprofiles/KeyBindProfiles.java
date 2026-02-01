@@ -259,6 +259,12 @@ public class KeyBindProfiles implements ClientModInitializer {
         }
         KeyBinding.updateKeysByCode();
 
+        // сбрасываем состояние всех клавиш чтобы не залипали действия
+        // (когда горячая клавиша профиля совпадает с игровым действием)
+        for (KeyBinding binding : client.options.allKeys) {
+            binding.setPressed(false);
+        }
+
         // сохраняем в options.txt
         try {
             client.options.write();

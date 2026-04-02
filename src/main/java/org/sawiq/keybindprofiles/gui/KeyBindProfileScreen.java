@@ -1,28 +1,30 @@
 package org.sawiq.keybindprofiles.gui;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.option.KeybindsScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
 import org.sawiq.keybindprofiles.KeyBindProfiles;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public class KeyBindProfileScreen extends Screen {
     private final Screen parent;
-    private TextFieldWidget profileNameField;
+    private EditBox profileNameField;
     private final List<ProfileButtonPair> profileButtonPairs = new ArrayList<>();
-    private String selectedProfile = null;
-    private int scrollOffset = 0;
+    private String selectedProfile;
+    private int scrollOffset;
 
     private static final int START_Y = 50;
     private static final int BUTTON_HEIGHT = 20;
@@ -31,16 +33,15 @@ public class KeyBindProfileScreen extends Screen {
     private static final int HOTKEY_BUTTON_WIDTH = 60;
     private static final int FOOTER_HEIGHT = 90;
 
-    private String capturingHotkeyFor = null;
+    private String capturingHotkeyFor;
     private final List<String> capturedKeys = new ArrayList<>();
 
-    // класс для хранения пары кнопок профиля
     private static class ProfileButtonPair {
-        final ButtonWidget profileButton;
-        final ButtonWidget hotkeyButton;
+        final Button profileButton;
+        final Button hotkeyButton;
         final String profileName;
 
-        ProfileButtonPair(ButtonWidget profileButton, ButtonWidget hotkeyButton, String profileName) {
+        ProfileButtonPair(Button profileButton, Button hotkeyButton, String profileName) {
             this.profileButton = profileButton;
             this.hotkeyButton = hotkeyButton;
             this.profileName = profileName;
@@ -48,213 +49,161 @@ public class KeyBindProfileScreen extends Screen {
     }
 
     public KeyBindProfileScreen(Screen parent) {
-        super(Text.translatable("keybindprofiles.title"));
+        super(Component.translatable("keybindprofiles.title"));
         this.parent = parent;
     }
 
     @Override
     protected void init() {
-        // перезагружаем профили когда открываем меню
         KeyBindProfiles.reloadProfilesFromDirectory();
 
-        // поле ввода имени профиля
-        profileNameField = new TextFieldWidget(textRenderer, (width - PROFILE_BUTTON_WIDTH) / 2, 20, PROFILE_BUTTON_WIDTH, 20, Text.translatable("keybindprofiles.profile_name"));
+        profileNameField = new EditBox(font, (width - PROFILE_BUTTON_WIDTH) / 2, 20, PROFILE_BUTTON_WIDTH, 20, Component.translatable("keybindprofiles.profile_name"));
         profileNameField.setMaxLength(32);
-        addDrawableChild(profileNameField);
+        addRenderableWidget(profileNameField);
 
-        // кнопка открытия папки в правом верхнем углу
-        ButtonWidget openFolderButton = ButtonWidget.builder(Text.literal("📁"), button ->
+        addRenderableWidget(Button.builder(Component.translatable("keybindprofiles.open_folder"), button ->
                 KeyBindProfiles.openProfilesFolder()
-        ).dimensions(width - 30, 10, 20, 20).build();
-        addDrawableChild(openFolderButton);
+        ).bounds(width - 70, 10, 60, 20).build());
 
         int buttonY = height - FOOTER_HEIGHT + 10;
 
-        // кнопка создания профиля
-        ButtonWidget createButton = ButtonWidget.builder(Text.translatable("keybindprofiles.create"), button -> {
-            String name = profileNameField.getText().trim();
-            if (!name.isEmpty() && !KeyBindProfiles.PROFILES.containsKey(name)) {
-                MinecraftClient client = MinecraftClient.getInstance();
-                if (client.options != null) {
-                    KeyBindProfiles.saveProfile(name, client.options.allKeys);
-                    refreshProfileList();
-                    profileNameField.setText("");
-                }
+        addRenderableWidget(Button.builder(Component.translatable("keybindprofiles.create"), button -> {
+            String name = profileNameField.getValue().trim();
+            if (!name.isEmpty() && !KeyBindProfiles.PROFILES.containsKey(name) && minecraft != null && minecraft.options != null) {
+                KeyBindProfiles.saveProfile(name, minecraft.options.keyMappings);
+                profileNameField.setValue("");
+                refreshProfileList();
             }
-        }).dimensions((width / 2) - 155, buttonY, 150, BUTTON_HEIGHT).build();
-        addDrawableChild(createButton);
+        }).bounds((width / 2) - 155, buttonY, 150, BUTTON_HEIGHT).build());
 
-        // кнопка применения профиля
-        ButtonWidget applyButton = ButtonWidget.builder(Text.translatable("keybindprofiles.apply"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("keybindprofiles.apply"), button -> {
             if (selectedProfile != null) {
                 KeyBindProfiles.applyProfile(selectedProfile);
+                refreshParentKeybindsScreen();
+            }
+        }).bounds((width / 2) + 5, buttonY, 150, BUTTON_HEIGHT).build());
 
-                // если открыли из меню управления, обновляем его
-                if (parent instanceof KeybindsScreen keybindsScreen) {
+        addRenderableWidget(Button.builder(Component.translatable("keybindprofiles.rename"), button -> {
+            if (selectedProfile == null || minecraft == null || minecraft.options == null) {
+                return;
+            }
+
+            String newName = profileNameField.getValue().trim();
+            if (newName.isEmpty() || newName.equals(selectedProfile) || KeyBindProfiles.PROFILES.containsKey(newName)) {
+                return;
+            }
+
+            Map<String, String> keyMap = KeyBindProfiles.PROFILES.get(selectedProfile);
+            if (keyMap == null) {
+                return;
+            }
+
+            List<String> hotkeys = KeyBindProfiles.getProfileHotkey(selectedProfile);
+            KeyBindProfiles.deleteProfile(selectedProfile);
+
+            KeyMapping[] newBindings = minecraft.options.keyMappings.clone();
+            for (KeyMapping keyMapping : newBindings) {
+                String savedKey = keyMap.get(keyMapping.getName());
+                if (savedKey != null) {
                     try {
-                        MinecraftClient mcClient = MinecraftClient.getInstance();
-                        Field controlsListField = KeybindsScreen.class.getDeclaredField("controlsList");
-                        controlsListField.setAccessible(true);
-                        Object controlsList = controlsListField.get(keybindsScreen);
-                        if (controlsList != null) {
-                            Method updateMethod = controlsList.getClass().getMethod("update");
-                            updateMethod.invoke(controlsList);
-                        }
-                    } catch (Exception e) {
-                        try {
-                            MinecraftClient mcClient = MinecraftClient.getInstance();
-                            keybindsScreen.init(mcClient, keybindsScreen.width, keybindsScreen.height);
-                        } catch (Exception ignored) {
-                            // ну не вышло
-                        }
-                    }
-                }
-                assert client != null;
-                this.init(client, this.width, this.height);
-            }
-        }).dimensions((width / 2) + 5, buttonY, 150, BUTTON_HEIGHT).build();
-        addDrawableChild(applyButton);
-
-        // кнопка переименования
-        ButtonWidget renameButton = ButtonWidget.builder(Text.translatable("keybindprofiles.rename"), button -> {
-            if (selectedProfile != null && !profileNameField.getText().trim().isEmpty()) {
-                String newName = profileNameField.getText().trim();
-                if (!newName.equals(selectedProfile) && !KeyBindProfiles.PROFILES.containsKey(newName)) {
-                    Map<String, String> keyMap = KeyBindProfiles.PROFILES.get(selectedProfile);
-                    if (keyMap != null) {
-                        // сохраняем hotkeys
-                        List<String> hotkeys = KeyBindProfiles.getProfileHotkey(selectedProfile);
-
-                        KeyBindProfiles.deleteProfile(selectedProfile);
-
-                        MinecraftClient client = MinecraftClient.getInstance();
-                        if (client.options != null) {
-                            KeyBinding[] newBindings = client.options.allKeys.clone();
-                            for (KeyBinding kb : newBindings) {
-                                String key = kb.getId();
-                                if (keyMap.containsKey(key)) {
-                                    try {
-                                        kb.setBoundKey(InputUtil.fromTranslationKey(keyMap.get(key)));
-                                    } catch (Exception ignored) {
-                                        // пропускаем
-                                    }
-                                }
-                            }
-                            KeyBindProfiles.saveProfile(newName, newBindings);
-
-                            // восстанавливаем hotkeys
-                            if (hotkeys != null) {
-                                KeyBindProfiles.setProfileHotkey(newName, hotkeys);
-                            }
-
-                            selectedProfile = newName;
-                            refreshProfileList();
-                            if (Objects.equals(KeyBindProfiles.getCurrentProfile(), selectedProfile)) {
-                                KeyBindProfiles.saveCurrentProfile(newName);
-                            }
-                            this.init(client, this.width, this.height);
-                        }
+                        keyMapping.setKey(InputConstants.getKey(savedKey));
+                    } catch (Exception ignored) {
+                        // Ignore broken imported bindings during rename.
                     }
                 }
             }
-        }).dimensions((width / 2) - 155, buttonY + BUTTON_SPACING, 150, BUTTON_HEIGHT).build();
-        addDrawableChild(renameButton);
 
-        // кнопка удаления
-        ButtonWidget deleteButton = ButtonWidget.builder(Text.translatable("keybindprofiles.delete"), button -> {
+            KeyBindProfiles.saveProfile(newName, newBindings);
+            if (hotkeys != null) {
+                KeyBindProfiles.setProfileHotkey(newName, hotkeys);
+            }
+
+            if (Objects.equals(KeyBindProfiles.getCurrentProfile(), selectedProfile)) {
+                KeyBindProfiles.saveCurrentProfile(newName);
+            }
+
+            selectedProfile = newName;
+            refreshProfileList();
+            refreshParentKeybindsScreen();
+        }).bounds((width / 2) - 155, buttonY + BUTTON_SPACING, 150, BUTTON_HEIGHT).build());
+
+        addRenderableWidget(Button.builder(Component.translatable("keybindprofiles.delete"), button -> {
             if (selectedProfile != null) {
                 KeyBindProfiles.deleteProfile(selectedProfile);
-                boolean wasCurrentProfile = Objects.equals(KeyBindProfiles.getCurrentProfile(), selectedProfile);
                 selectedProfile = null;
-                profileNameField.setText("");
+                profileNameField.setValue("");
                 refreshProfileList();
-                if (wasCurrentProfile) {
-                    assert client != null;
-                    this.init(client, this.width, this.height);
-                }
+                refreshParentKeybindsScreen();
             }
-        }).dimensions((width / 2) + 5, buttonY + BUTTON_SPACING, 150, BUTTON_HEIGHT).build();
-        addDrawableChild(deleteButton);
+        }).bounds((width / 2) + 5, buttonY + BUTTON_SPACING, 150, BUTTON_HEIGHT).build());
 
-        // кнопка выхода
-        ButtonWidget doneButton = ButtonWidget.builder(Text.translatable("gui.done"), button -> {
-            if (parent instanceof KeybindsScreen originalKeybindsScreen) {
-                MinecraftClient mcClient = MinecraftClient.getInstance();
-                if (mcClient.options != null) {
-                    Screen newScreen;
-                    try {
-                        Field parentField = Screen.class.getDeclaredField("parent");
-                        parentField.setAccessible(true);
-                        Screen originalParent = (Screen) parentField.get(originalKeybindsScreen);
-                        newScreen = new KeybindsScreen(originalParent, mcClient.options);
-                    } catch (Exception e) {
-                        newScreen = new KeybindsScreen(null, mcClient.options);
-                    }
-                    assert client != null;
-                    client.setScreen(newScreen);
-                } else {
-                    assert client != null;
-                    client.setScreen(null);
-                }
-            } else {
-                assert client != null;
-                client.setScreen(parent);
+        addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> {
+            if (minecraft != null) {
+                minecraft.setScreen(parent);
             }
-        }).dimensions((width / 2) - 100, height - 30, 200, BUTTON_HEIGHT).build();
-        addDrawableChild(doneButton);
+        }).bounds((width / 2) - 100, height - 30, 200, BUTTON_HEIGHT).build());
 
         refreshProfileList();
     }
 
-    // текст для кнопки hotkey
-    private Text getHotkeyButtonText(String profileName) {
-        // если сейчас захватываем клавиши для этого профиля
-        if (capturingHotkeyFor != null && capturingHotkeyFor.equals(profileName)) {
-            if (capturedKeys.isEmpty()) {
-                return Text.literal("...");
-            }
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < capturedKeys.size(); i++) {
-                sb.append(InputUtil.fromTranslationKey(capturedKeys.get(i)).getLocalizedText().getString());
-                if (i < capturedKeys.size() - 1) {
-                    sb.append("+");
+    private void refreshParentKeybindsScreen() {
+        if (parent instanceof KeyBindsScreen keyBindsScreen) {
+            try {
+                Field keyBindsListField = KeyBindsScreen.class.getDeclaredField("keyBindsList");
+                keyBindsListField.setAccessible(true);
+                Object keyBindsList = keyBindsListField.get(keyBindsScreen);
+                if (keyBindsList != null) {
+                    keyBindsList.getClass().getMethod("resetMappingAndUpdateButtons").invoke(keyBindsList);
+                    keyBindsList.getClass().getMethod("refreshEntries").invoke(keyBindsList);
                 }
+            } catch (ReflectiveOperationException ignored) {
+                // Fall back to rebuilding the screen if internals change again.
             }
-            return Text.literal(sb.toString());
+
+            keyBindsScreen.init(width, height);
+        }
+    }
+
+    private Component getHotkeyButtonText(String profileName) {
+        if (Objects.equals(capturingHotkeyFor, profileName)) {
+            if (capturedKeys.isEmpty()) {
+                return Component.literal("...");
+            }
+            return Component.literal(joinDisplayNames(capturedKeys));
         }
 
-        // показываем текущие hotkeys
         List<String> keys = KeyBindProfiles.getProfileHotkey(profileName);
         if (keys == null || keys.isEmpty()) {
-            return Text.literal("-");
+            return Component.literal("-");
         }
 
-        StringBuilder sb = new StringBuilder();
+        return Component.literal(joinDisplayNames(keys));
+    }
+
+    private String joinDisplayNames(List<String> keys) {
+        StringBuilder builder = new StringBuilder();
         for (int i = 0; i < keys.size(); i++) {
-            sb.append(InputUtil.fromTranslationKey(keys.get(i)).getLocalizedText().getString());
+            builder.append(InputConstants.getKey(keys.get(i)).getDisplayName().getString());
             if (i < keys.size() - 1) {
-                sb.append("+");
+                builder.append("+");
             }
         }
-        return Text.literal(sb.toString());
+        return builder.toString();
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
-        // если захватываем клавиши
+    public boolean keyPressed(KeyEvent event) {
         if (capturingHotkeyFor != null) {
-            int keyCode = input.key();
+            int keyCode = event.key();
 
-            // ESC = отмена
-            if (keyCode == InputUtil.GLFW_KEY_ESCAPE) {
+            if (keyCode == InputConstants.KEY_ESCAPE) {
                 capturingHotkeyFor = null;
                 capturedKeys.clear();
                 refreshProfileList();
                 return true;
             }
 
-            // BACKSPACE = удалить hotkey
-            if (keyCode == InputUtil.GLFW_KEY_BACKSPACE) {
+            if (keyCode == InputConstants.KEY_BACKSPACE) {
                 KeyBindProfiles.setProfileHotkey(capturingHotkeyFor, null);
                 capturingHotkeyFor = null;
                 capturedKeys.clear();
@@ -262,8 +211,7 @@ public class KeyBindProfileScreen extends Screen {
                 return true;
             }
 
-            // ENTER = сохранить
-            if (keyCode == InputUtil.GLFW_KEY_ENTER) {
+            if (keyCode == InputConstants.KEY_RETURN) {
                 if (!capturedKeys.isEmpty()) {
                     KeyBindProfiles.setProfileHotkey(capturingHotkeyFor, new ArrayList<>(capturedKeys));
                 }
@@ -273,37 +221,35 @@ public class KeyBindProfileScreen extends Screen {
                 return true;
             }
 
-            // добавляем клавишу (макс 2)
-            String translationKey = InputUtil.fromKeyCode(input).getTranslationKey();
-            if (!capturedKeys.contains(translationKey) && capturedKeys.size() < 2) {
-                capturedKeys.add(translationKey);
+            String savedKey = InputConstants.getKey(event).getName();
+            if (!capturedKeys.contains(savedKey) && capturedKeys.size() < 2) {
+                capturedKeys.add(savedKey);
                 refreshProfileList();
             }
             return true;
         }
 
-        return super.keyPressed(input);
+        return super.keyPressed(event);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean bl) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean insideBounds) {
         if (capturingHotkeyFor != null) {
-            String translationKey = InputUtil.Type.MOUSE.createFromCode(click.button()).getTranslationKey();
-            if (!capturedKeys.contains(translationKey) && capturedKeys.size() < 2) {
-                capturedKeys.add(translationKey);
+            String savedKey = InputConstants.Type.MOUSE.getOrCreate(event.button()).getName();
+            if (!capturedKeys.contains(savedKey) && capturedKeys.size() < 2) {
+                capturedKeys.add(savedKey);
                 refreshProfileList();
             }
             return true;
         }
-        return super.mouseClicked(click, bl);
+
+        return super.mouseClicked(event, insideBounds);
     }
 
-    // обновить список профилей
     public void refreshProfileList() {
-        // удаляем старые кнопки
         for (ProfileButtonPair pair : profileButtonPairs) {
-            remove(pair.profileButton);
-            remove(pair.hotkeyButton);
+            removeWidget(pair.profileButton);
+            removeWidget(pair.hotkeyButton);
         }
         profileButtonPairs.clear();
 
@@ -316,42 +262,37 @@ public class KeyBindProfileScreen extends Screen {
         for (String profile : KeyBindProfiles.PROFILES.keySet()) {
             int buttonY = START_Y + buttonIndex * BUTTON_SPACING - scrollOffset;
 
-            // рендерим только видимые кнопки
             if (buttonY + BUTTON_HEIGHT > START_Y && buttonY < height - FOOTER_HEIGHT) {
-                // кнопка профиля
-                ButtonWidget profileButton = ButtonWidget.builder(Text.literal(profile), b -> {
+                Button profileButton = Button.builder(Component.literal(profile), button -> {
                     selectedProfile = profile;
-                    profileNameField.setText(profile);
+                    profileNameField.setValue(profile);
 
-                    // обновляем активность всех кнопок
                     for (ProfileButtonPair pair : profileButtonPairs) {
                         pair.profileButton.active = !pair.profileName.equals(selectedProfile);
                     }
-                }).dimensions((width - PROFILE_BUTTON_WIDTH - HOTKEY_BUTTON_WIDTH - 5) / 2, buttonY, PROFILE_BUTTON_WIDTH, BUTTON_HEIGHT).build();
+                }).bounds((width - PROFILE_BUTTON_WIDTH - HOTKEY_BUTTON_WIDTH - 5) / 2, buttonY, PROFILE_BUTTON_WIDTH, BUTTON_HEIGHT).build();
                 profileButton.active = !profile.equals(selectedProfile);
 
-                // кнопка hotkey справа
-                ButtonWidget hotkeyButton = ButtonWidget.builder(getHotkeyButtonText(profile), b -> {
-                    if (capturingHotkeyFor != null && capturingHotkeyFor.equals(profile)) {
-                        // сохраняем
+                Button hotkeyButton = Button.builder(getHotkeyButtonText(profile), button -> {
+                    if (Objects.equals(capturingHotkeyFor, profile)) {
                         if (!capturedKeys.isEmpty()) {
                             KeyBindProfiles.setProfileHotkey(profile, new ArrayList<>(capturedKeys));
                         }
                         capturingHotkeyFor = null;
                         capturedKeys.clear();
                     } else {
-                        // начинаем захват
                         capturingHotkeyFor = profile;
                         capturedKeys.clear();
                     }
                     refreshProfileList();
-                }).dimensions((width - PROFILE_BUTTON_WIDTH - HOTKEY_BUTTON_WIDTH - 5) / 2 + PROFILE_BUTTON_WIDTH + 5, buttonY, HOTKEY_BUTTON_WIDTH, BUTTON_HEIGHT).build();
+                }).bounds((width - PROFILE_BUTTON_WIDTH - HOTKEY_BUTTON_WIDTH - 5) / 2 + PROFILE_BUTTON_WIDTH + 5, buttonY, HOTKEY_BUTTON_WIDTH, BUTTON_HEIGHT).build();
 
                 ProfileButtonPair pair = new ProfileButtonPair(profileButton, hotkeyButton, profile);
                 profileButtonPairs.add(pair);
-                addDrawableChild(profileButton);
-                addDrawableChild(hotkeyButton);
+                addRenderableWidget(profileButton);
+                addRenderableWidget(hotkeyButton);
             }
+
             buttonIndex++;
         }
     }
@@ -360,51 +301,44 @@ public class KeyBindProfileScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
         int centerX = (width - PROFILE_BUTTON_WIDTH - HOTKEY_BUTTON_WIDTH - 5) / 2;
 
-        // скроллим только если курсор в области списка
-        if (mouseX >= centerX &&
-                mouseX <= centerX + PROFILE_BUTTON_WIDTH + HOTKEY_BUTTON_WIDTH + 5 &&
-                mouseY >= START_Y &&
-                mouseY <= height - FOOTER_HEIGHT) {
+        if (mouseX >= centerX
+                && mouseX <= centerX + PROFILE_BUTTON_WIDTH + HOTKEY_BUTTON_WIDTH + 5
+                && mouseY >= START_Y
+                && mouseY <= height - FOOTER_HEIGHT) {
 
             int listHeight = height - FOOTER_HEIGHT - START_Y;
             int totalHeight = KeyBindProfiles.PROFILES.size() * BUTTON_SPACING;
 
             if (totalHeight > listHeight) {
                 int maxOffset = Math.max(0, totalHeight - listHeight);
-                scrollOffset = Math.max(0, Math.min(scrollOffset - (int)(vertical * BUTTON_SPACING), maxOffset));
+                scrollOffset = Math.max(0, Math.min(scrollOffset - (int) (vertical * BUTTON_SPACING), maxOffset));
                 refreshProfileList();
                 return true;
             }
         }
+
         return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        // Рисуем только затемнение фона, без blur (он уже применен автоматически)
-        this.renderDarkening(context);
+    public void extractRenderState(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float delta) {
+        extractTransparentBackground(extractor);
 
-        // темный фон для списка профилей
         int centerX = (width - PROFILE_BUTTON_WIDTH - HOTKEY_BUTTON_WIDTH - 5) / 2;
-        context.fill(centerX - 5, START_Y - 5, centerX + PROFILE_BUTTON_WIDTH + HOTKEY_BUTTON_WIDTH + 10, height - FOOTER_HEIGHT + 5, 0x40000000);
+        extractor.fill(centerX - 5, START_Y - 5, centerX + PROFILE_BUTTON_WIDTH + HOTKEY_BUTTON_WIDTH + 10, height - FOOTER_HEIGHT + 5, 0x40000000);
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(extractor, mouseX, mouseY, delta);
 
-        // текущий профиль вверху слева (ARGB: 0xFFFFFFFF = белый)
         String currentProfileName = KeyBindProfiles.getCurrentProfile();
-        Text fullProfileText;
-        if (currentProfileName != null) {
-            fullProfileText = Text.translatable("keybindprofiles.applied_profile", currentProfileName);
-        } else {
-            fullProfileText = Text.translatable("keybindprofiles.applied_profile", Text.translatable("options.off"));
-        }
-        context.drawTextWithShadow(textRenderer, fullProfileText, 10, 10, 0xFFFFFFFF);
+        Component fullProfileText = currentProfileName != null
+                ? Component.translatable("keybindprofiles.applied_profile", currentProfileName)
+                : Component.translatable("keybindprofiles.applied_profile", Component.translatable("options.off"));
+        extractor.text(font, fullProfileText, 10, 10, 0xFFFFFFFF, true);
 
-        // подсказка при захвате клавиш (ARGB: 0xFFFFFF55 = жёлтый)
         if (capturingHotkeyFor != null) {
-            Text hint = Text.translatable("keybindprofiles.hotkey_hint");
-            int hintX = (width - textRenderer.getWidth(hint)) / 2;
-            context.drawTextWithShadow(textRenderer, hint, hintX, height - FOOTER_HEIGHT - 20, 0xFFFFFF55);
+            Component hint = Component.translatable("keybindprofiles.hotkey_hint");
+            int hintX = (width - font.width(hint)) / 2;
+            extractor.text(font, hint, hintX, height - FOOTER_HEIGHT - 20, 0xFFFFFF55, true);
         }
     }
 }

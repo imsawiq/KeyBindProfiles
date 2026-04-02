@@ -1,10 +1,8 @@
 {
   "required": true,
   "package": "org.sawiq.keybindprofiles.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "client": [
-    "ScreenInvoker",
-    "ScreenMixin",
     "KeybindsScreenRenderMixin",
     "HudMixin"
   ],

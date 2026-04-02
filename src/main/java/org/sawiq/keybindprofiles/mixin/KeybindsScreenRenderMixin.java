@@ -1,38 +1,30 @@
 package org.sawiq.keybindprofiles.mixin;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.option.KeybindsScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
+import net.minecraft.network.chat.Component;
 import org.sawiq.keybindprofiles.KeyBindProfiles;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(KeybindsScreen.class)
-public abstract class KeybindsScreenRenderMixin {
+@Mixin(KeyBindsScreen.class)
+public abstract class KeybindsScreenRenderMixin extends Screen {
+    protected KeybindsScreenRenderMixin(Component title) {
+        super(title);
+    }
 
-    @Unique
-    private boolean keybindprofiles$buttonAdded = false;
-
-    @Inject(method = "render(Lnet/minecraft/client/gui/DrawContext;IIF)V", at = @At("HEAD"), require = 0)
-    private void keybindprofiles$render(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci) {
-        if (keybindprofiles$buttonAdded) return;
-
+    @Inject(method = "addFooter", at = @At("TAIL"))
+    private void keybindprofiles$addFooterButton(CallbackInfo ci) {
         Screen thisScreen = (Screen) (Object) this;
-
         int buttonX = thisScreen.width / 2 - 155 - 8 - 150;
-        int buttonY = thisScreen.height - 26;
+        int buttonY = thisScreen.height - 27;
 
-        ButtonWidget profileButton = ButtonWidget.builder(
-                Text.translatable("keybindprofiles.open"),
+        addRenderableWidget(Button.builder(
+                Component.translatable("keybindprofiles.open"),
                 button -> KeyBindProfiles.openConfigScreen(thisScreen)
-        ).dimensions(buttonX, buttonY, 150, 20).build();
-
-        ((ScreenInvoker) thisScreen).keybindprofiles$invokeAddDrawableChild(profileButton);
-        keybindprofiles$buttonAdded = true;
+        ).bounds(buttonX, buttonY, 150, 20).build());
     }
 }

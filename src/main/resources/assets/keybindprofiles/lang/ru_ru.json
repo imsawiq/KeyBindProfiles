@@ -7,6 +7,7 @@
   "keybindprofiles.apply": "Применить Профиль",
   "keybindprofiles.rename": "Переименовать Профиль",
   "keybindprofiles.delete": "Удалить Профиль",
+  "keybindprofiles.open_folder": "Папка",
   "keybindprofiles.export": "Экспорт Всех Профилей",
   "keybindprofiles.open": "Управление Профилями",
   "key.keybindprofiles.open": "Открыть Профили Привязок Клавиш",

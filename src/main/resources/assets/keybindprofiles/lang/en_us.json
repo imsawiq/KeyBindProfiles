@@ -7,6 +7,7 @@
   "keybindprofiles.apply": "Apply Profile",
   "keybindprofiles.rename": "Rename Profile",
   "keybindprofiles.delete": "Delete Profile",
+  "keybindprofiles.open_folder": "Folder",
   "keybindprofiles.export": "Export All Profiles",
   "keybindprofiles.open": "Manage Profiles",
   "key.keybindprofiles.open": "Open Key Bind Profiles",

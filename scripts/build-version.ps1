@@ -74,10 +74,23 @@ try {
         exit $ExitCode
     }
 
-    $DistDir = Join-Path $Root "dist\$OutputVersion"
+    $DistDir = Join-Path $Root "dist"
     New-Item -ItemType Directory -Force $DistDir | Out-Null
-    Copy-Item -Force (Join-Path $ProjectDir "build\libs\*.jar") $DistDir
-    Write-Host "Copied jars to $DistDir"
+    Get-ChildItem $DistDir -Filter "*-$OutputVersion*.jar" -File | Remove-Item -Force
+
+    $JarFiles = Get-ChildItem (Join-Path $ProjectDir "build\libs") -Filter "*.jar" -File
+    foreach ($JarFile in $JarFiles) {
+        $OutputName = if ($JarFile.BaseName.EndsWith("-sources")) {
+            $BaseName = $JarFile.BaseName.Substring(0, $JarFile.BaseName.Length - "-sources".Length)
+            "$BaseName-$OutputVersion-sources$($JarFile.Extension)"
+        } else {
+            "$($JarFile.BaseName)-$OutputVersion$($JarFile.Extension)"
+        }
+
+        Copy-Item -Force $JarFile.FullName (Join-Path $DistDir $OutputName)
+    }
+
+    Write-Host "Copied versioned jars to $DistDir"
 } finally {
     $env:JAVA_HOME = $OldJavaHome
     $env:Path = $OldPath

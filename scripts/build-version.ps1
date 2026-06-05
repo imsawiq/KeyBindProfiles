@@ -19,7 +19,9 @@ $Targets = @{
     "1.21.6-8"  = @{ Path = (Join-Path $Root "versions\1.21.6-8"); Version = "1.21.6-8" }
     "1.21.9"    = @{ Path = (Join-Path $Root "versions\1.21.9-11"); Version = "1.21.9-11" }
     "1.21.9-11" = @{ Path = (Join-Path $Root "versions\1.21.9-11"); Version = "1.21.9-11" }
-    "26.1"      = @{ Path = (Join-Path $Root "versions\26.1"); Version = "26.1" }
+    "26.1"      = @{ Path = (Join-Path $Root "versions\26.1"); Version = "26.1-26.1.2" }
+    "26.1.2"    = @{ Path = (Join-Path $Root "versions\26.1"); Version = "26.1-26.1.2" }
+    "26.1-26.1.2" = @{ Path = (Join-Path $Root "versions\26.1"); Version = "26.1-26.1.2" }
 }
 
 if ($Version -eq "all") {

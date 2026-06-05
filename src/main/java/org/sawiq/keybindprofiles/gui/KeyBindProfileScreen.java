@@ -446,7 +446,7 @@ public class KeyBindProfileScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, width, height, 0x66000000);
 
         KeyBindProfileScreenLayout layout = layout();
         int listX = layout.leftPanelX();

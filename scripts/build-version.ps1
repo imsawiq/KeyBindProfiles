@@ -9,9 +9,12 @@ $ErrorActionPreference = "Stop"
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Targets = @{
-    "master"    = @{ Path = $Root; Version = "master" }
-    "current"   = @{ Path = $Root; Version = "master" }
-    "1.21"      = @{ Path = $Root; Version = "master" }
+    "master"          = @{ Path = $Root; Version = "1.21.1-1.21.5" }
+    "current"         = @{ Path = $Root; Version = "1.21.1-1.21.5" }
+    "1.21"            = @{ Path = $Root; Version = "1.21.1-1.21.5" }
+    "1.21.1"          = @{ Path = $Root; Version = "1.21.1-1.21.5" }
+    "1.21.1-1.21.5"   = @{ Path = $Root; Version = "1.21.1-1.21.5" }
+    "1.21.5"          = @{ Path = $Root; Version = "1.21.1-1.21.5" }
     "1.21.6"    = @{ Path = (Join-Path $Root "versions\1.21.6-8"); Version = "1.21.6-8" }
     "1.21.6-8"  = @{ Path = (Join-Path $Root "versions\1.21.6-8"); Version = "1.21.6-8" }
     "1.21.9"    = @{ Path = (Join-Path $Root "versions\1.21.9-11"); Version = "1.21.9-11" }

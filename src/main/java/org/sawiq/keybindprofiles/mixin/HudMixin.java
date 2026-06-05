@@ -28,11 +28,9 @@ public abstract class HudMixin {
             int screenWidth = context.getScaledWindowWidth();
             int screenHeight = context.getScaledWindowHeight();
 
-            // Позиция над панелью hotbar (инвентаря)
             int x = (screenWidth - textRenderer.getWidth(message)) / 2;
-            int y = screenHeight - 59; // Над хотбаром
+            int y = screenHeight - 59;
 
-            // Тень для лучшей видимости
             context.drawTextWithShadow(textRenderer, message, x, y, 0x55FF55);
         }
     }

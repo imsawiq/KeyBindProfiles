@@ -1,390 +1,164 @@
 package org.sawiq.keybindprofiles;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.option.KeybindsScreen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
+import org.sawiq.keybindprofiles.gui.ControlsScreenProfileButton;
 import org.sawiq.keybindprofiles.gui.KeyBindProfileScreen;
-import org.lwjgl.glfw.GLFW;
+import org.sawiq.keybindprofiles.input.ProfileHotkeyController;
+import org.sawiq.keybindprofiles.notification.ProfileNotification;
+import org.sawiq.keybindprofiles.profile.ProfileService;
+import org.sawiq.keybindprofiles.server.ServerAutoSwitchController;
+import org.sawiq.keybindprofiles.storage.ProfileFileStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.awt.Desktop;
-import java.io.*;
-import java.lang.reflect.Type;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 public class KeyBindProfiles implements ClientModInitializer {
     public static final String MOD_ID = "keybindprofiles";
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    // тут все профили и их кейбинды
-    public static final Map<String, Map<String, String>> PROFILES = new HashMap<>();
-    // тут горячие клавиши для профилей
-    public static final Map<String, java.util.List<String>> PROFILE_HOTKEYS = new HashMap<>();
+    private static final ProfileNotification NOTIFICATION = new ProfileNotification();
+    private static final ProfileService PROFILE_SERVICE = new ProfileService(new ProfileFileStore());
+    private static final ProfileHotkeyController HOTKEY_CONTROLLER = new ProfileHotkeyController(PROFILE_SERVICE, NOTIFICATION);
+    private static final ServerAutoSwitchController AUTO_SWITCH_CONTROLLER = new ServerAutoSwitchController(PROFILE_SERVICE, NOTIFICATION);
 
-    private static File profilesDir;
-    private static File currentProfileFile;
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    public static final Map<String, Map<String, String>> PROFILES = PROFILE_SERVICE.profiles();
+    public static final Map<String, List<String>> PROFILE_HOTKEYS = PROFILE_SERVICE.profileHotkeys();
+    public static final Map<String, List<String>> PROFILE_AUTO_SWITCH_SERVERS = PROFILE_SERVICE.profileAutoSwitchServers();
+
     private static KeyBinding openProfileScreenKey;
-    private static String currentProfile = null;
-
-    // для показа уведомлений типа "профиль применен"
-    private static String notificationText = null;
-    private static long notificationTime = 0;
-    private static final long NOTIFICATION_DURATION = 3000;
-
-    // чтобы не спамить переключениями когда клавиша зажата
-    private static final Set<String> pressedHotkeys = new HashSet<>();
 
     @Override
     public void onInitializeClient() {
-        // регаем кнопку открытия меню
+        PROFILE_SERVICE.setAutoSwitchResetCallback(AUTO_SWITCH_CONTROLLER::reset);
+        registerOpenScreenKey();
+        registerClientEvents();
+        registerConnectionEvents();
+        registerControlsScreenButton();
+        loadProfilesOnClientStart();
+    }
+
+    public static void openConfigScreen(Screen parent) {
+        MinecraftClient.getInstance().setScreen(new KeyBindProfileScreen(parent));
+    }
+
+    public static void reloadProfilesFromDirectory() {
+        PROFILE_SERVICE.reloadProfiles();
+    }
+
+    public static void saveProfile(String name, KeyBinding[] bindings) {
+        PROFILE_SERVICE.saveProfile(name, bindings);
+    }
+
+    public static void applyProfile(String name) {
+        PROFILE_SERVICE.applyProfile(name);
+    }
+
+    public static void deleteProfile(String name) {
+        PROFILE_SERVICE.deleteProfile(name);
+    }
+
+    public static void exportProfile(String name) {
+        PROFILE_SERVICE.exportProfile(name);
+    }
+
+    public static void setProfileHotkey(String profileName, List<String> keys) {
+        PROFILE_SERVICE.setProfileHotkey(profileName, keys);
+    }
+
+    public static List<String> getProfileHotkey(String profileName) {
+        return PROFILE_SERVICE.getProfileHotkey(profileName);
+    }
+
+    public static void setProfileAutoSwitchServers(String profileName, List<String> servers) {
+        PROFILE_SERVICE.setProfileAutoSwitchServers(profileName, servers);
+    }
+
+    public static List<String> getProfileAutoSwitchServers(String profileName) {
+        return PROFILE_SERVICE.getProfileAutoSwitchServers(profileName);
+    }
+
+    public static void loadProfiles() {
+        PROFILE_SERVICE.loadProfiles();
+    }
+
+    public static void saveCurrentProfile(String profile) {
+        PROFILE_SERVICE.saveCurrentProfile(profile);
+    }
+
+    public static String getCurrentProfile() {
+        return PROFILE_SERVICE.getCurrentProfile();
+    }
+
+    public static boolean openProfilesFolder() {
+        return PROFILE_SERVICE.openProfilesFolder();
+    }
+
+    public static void showNotification(String profileName) {
+        NOTIFICATION.show(profileName);
+    }
+
+    public static String getNotificationText() {
+        return NOTIFICATION.getVisibleProfileName();
+    }
+
+    private static void registerOpenScreenKey() {
         openProfileScreenKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.keybindprofiles.open",
                 InputUtil.Type.KEYSYM,
                 InputUtil.GLFW_KEY_O,
                 "key.categories.misc"
         ));
+    }
 
-        // каждый тик проверяем нажатия
+    private static void registerClientEvents() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (openProfileScreenKey.wasPressed()) {
-                openConfigScreen(null);
-            }
+            openProfileScreenWhenKeyPressed();
+            HOTKEY_CONTROLLER.tick(client);
+            AUTO_SWITCH_CONTROLLER.tick(client);
+        });
+    }
 
-            checkProfileHotkeys();
+    private static void registerConnectionEvents() {
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            AUTO_SWITCH_CONTROLLER.reset();
+            AUTO_SWITCH_CONTROLLER.tick(client);
         });
 
-        // при старте грузим профили
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            AUTO_SWITCH_CONTROLLER.reset();
+        });
+    }
+
+    private static void registerControlsScreenButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (screen instanceof KeybindsScreen) {
+                ControlsScreenProfileButton.addOrReplace(screen, scaledWidth, scaledHeight);
+            }
+        });
+    }
+
+    private static void loadProfilesOnClientStart() {
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
-            loadProfiles();
-            currentProfile = loadCurrentProfile();
-            if (currentProfile != null && PROFILES.containsKey(currentProfile)) {
-                applyProfile(currentProfile);
-            }
+            PROFILE_SERVICE.loadProfiles();
+            PROFILE_SERVICE.loadCurrentProfile();
         });
     }
 
-    // проверяем нажаты ли горячие клавиши профилей
-    private static void checkProfileHotkeys() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null) return;
-
-        for (Map.Entry<String, java.util.List<String>> entry : PROFILE_HOTKEYS.entrySet()) {
-            String profileName = entry.getKey();
-            java.util.List<String> keys = entry.getValue();
-
-            if (keys == null || keys.isEmpty()) continue;
-
-            // все клавиши нажаты?
-            boolean allPressed = true;
-            long windowHandle = client.getWindow().getHandle();
-            for (String translationKey : keys) {
-                if (!isHotkeyPressed(windowHandle, translationKey)) {
-                    allPressed = false;
-                    break;
-                }
-            }
-
-            String hotkeyId = profileName + "_" + keys.toString();
-
-            if (allPressed) {
-                // применяем только если еще не нажимали и это не текущий профиль
-                if (!pressedHotkeys.contains(hotkeyId) && !profileName.equals(currentProfile)) {
-                    applyProfile(profileName);
-                    showNotification(profileName);
-                    pressedHotkeys.add(hotkeyId);
-                }
-            } else {
-                // отпустили клавиши
-                pressedHotkeys.remove(hotkeyId);
-            }
-        }
-    }
-
-    private static boolean isHotkeyPressed(long windowHandle, String translationKey) {
-        if (translationKey == null || translationKey.isEmpty()) return false;
-        InputUtil.Key key;
-        try {
-            key = InputUtil.fromTranslationKey(translationKey);
-        } catch (Exception e) {
-            return false;
-        }
-
-        if (key == null) return false;
-
-        if (key.getCategory() == InputUtil.Type.MOUSE) {
-            return GLFW.glfwGetMouseButton(windowHandle, key.getCode()) == GLFW.GLFW_PRESS;
-        }
-
-        return InputUtil.isKeyPressed(windowHandle, key.getCode());
-    }
-
-    // показать уведомление
-    public static void showNotification(String profileName) {
-        notificationText = profileName;
-        notificationTime = System.currentTimeMillis();
-    }
-
-    // получить текст уведомления если еще не истекло время
-    public static String getNotificationText() {
-        if (notificationText != null && System.currentTimeMillis() - notificationTime < NOTIFICATION_DURATION) {
-            return notificationText;
-        }
-        return null;
-    }
-
-    // открыть меню профилей
-    public static void openConfigScreen(Screen parent) {
-        MinecraftClient.getInstance().setScreen(new KeyBindProfileScreen(parent));
-    }
-
-    // получить папку с профилями
-    private static File getProfilesDir() {
-        if (profilesDir == null) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client != null && client.runDirectory != null) {
-                profilesDir = new File(client.runDirectory, "config/keybindprofiles");
-                if (!profilesDir.exists()) {
-                    profilesDir.mkdirs();
-                }
-            }
-        }
-        return profilesDir;
-    }
-
-    // файл с текущим профилем
-    private static File getCurrentProfileFile() {
-        if (currentProfileFile == null) {
-            File dir = getProfilesDir();
-            if (dir != null) {
-                currentProfileFile = new File(dir, "current_profile.txt");
-            }
-        }
-        return currentProfileFile;
-    }
-
-    // загружаем все .kbp файлы из папки
-    private static void loadProfilesFromDirectory() {
-        File dir = getProfilesDir();
-        if (dir == null || !dir.exists()) return;
-
-        File[] files = dir.listFiles((d, name) -> name.endsWith(".kbp"));
-        if (files != null) {
-            for (File file : files) {
-                try (FileReader reader = new FileReader(file)) {
-                    Type type = new TypeToken<Map<String, Object>>(){}.getType();
-                    Map<String, Object> data = GSON.fromJson(reader, type);
-                    if (data != null && data.containsKey("name") && data.containsKey("keybindings")) {
-                        String name = (String) data.get("name");
-                        @SuppressWarnings("unchecked")
-                        Map<String, String> bindings = (Map<String, String>) data.get("keybindings");
-
-                        PROFILES.put(name, bindings);
-
-                        // грузим hotkeys если есть
-                        if (data.containsKey("hotkeys") && data.get("hotkeys") instanceof java.util.List) {
-                            @SuppressWarnings("unchecked")
-                            java.util.List<Object> hotkeys = (java.util.List<Object>) data.get("hotkeys");
-                            java.util.List<String> hotkeyKeys = new ArrayList<>();
-                            for (Object o : hotkeys) {
-                                if (o instanceof String) {
-                                    hotkeyKeys.add((String) o);
-                                } else if (o instanceof Number) {
-                                    int code = ((Number) o).intValue();
-                                    hotkeyKeys.add(InputUtil.fromKeyCode(code, 0).getTranslationKey());
-                                }
-                            }
-                            if (!hotkeyKeys.isEmpty()) {
-                                PROFILE_HOTKEYS.put(name, hotkeyKeys);
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    // перезагрузить профили (вызывается при открытии меню)
-    public static void reloadProfilesFromDirectory() {
-        PROFILES.clear();
-        PROFILE_HOTKEYS.clear();
-        loadProfilesFromDirectory();
-    }
-
-    // сохранить профиль
-    public static void saveProfile(String name, KeyBinding[] bindings) {
-        Objects.requireNonNull(name, "Profile name cannot be null");
-        Objects.requireNonNull(bindings, "Bindings cannot be null");
-
-        Map<String, String> keyMap = new HashMap<>();
-        for (KeyBinding binding : bindings) {
-            if (binding != null) {
-                keyMap.put(binding.getTranslationKey(), binding.getBoundKeyTranslationKey());
-            }
-        }
-        PROFILES.put(name, keyMap);
-        exportProfile(name);
-    }
-
-    // применить профиль
-    public static void applyProfile(String name) {
-        Map<String, String> keyMap = PROFILES.get(name);
-        if (keyMap == null) return;
-
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.options == null) return;
-
-        // меняем все кейбинды
-        for (KeyBinding binding : client.options.allKeys) {
-            if (binding != null) {
-                String savedKey = keyMap.get(binding.getTranslationKey());
-                if (savedKey != null) {
-                    try {
-                        InputUtil.Key inputKey = InputUtil.fromTranslationKey(savedKey);
-                        binding.setBoundKey(inputKey);
-                    } catch (Exception e) {
-                        // пропускаем кривые клавиши
-                    }
-                }
-            }
-        }
-        KeyBinding.updateKeysByCode();
-
-        // сбрасываем состояние всех клавиш чтобы не залипали действия
-        // (когда горячая клавиша профиля совпадает с игровым действием)
-        for (KeyBinding binding : client.options.allKeys) {
-            binding.setPressed(false);
-        }
-
-        // сохраняем в options.txt
-        try {
-            client.options.write();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        currentProfile = name;
-        saveCurrentProfile(name);
-    }
-
-    // удалить профиль
-    public static void deleteProfile(String name) {
-        Objects.requireNonNull(name, "Profile name cannot be null");
-        if (PROFILES.remove(name) != null) {
-            PROFILE_HOTKEYS.remove(name);
-            if (currentProfile != null && currentProfile.equals(name)) {
-                currentProfile = null;
-                saveCurrentProfile(null);
-            }
-
-            // удаляем .kbp файл
-            File dir = getProfilesDir();
-            if (dir != null) {
-                File file = new File(dir, name + ".kbp");
-                if (file.exists()) {
-                    file.delete();
-                }
-            }
-        }
-    }
-
-    // экспорт профиля в .kbp
-    public static void exportProfile(String name) {
-        Map<String, String> keyMap = PROFILES.get(name);
-        if (keyMap == null) return;
-
-        File dir = getProfilesDir();
-        if (dir == null) return;
-
-        Map<String, Object> exportData = new HashMap<>();
-        exportData.put("name", name);
-        exportData.put("keybindings", keyMap);
-
-        // добавляем hotkeys если есть
-        if (PROFILE_HOTKEYS.containsKey(name)) {
-            exportData.put("hotkeys", PROFILE_HOTKEYS.get(name));
-        }
-
-        File exportFile = new File(dir, name + ".kbp");
-        try (FileWriter writer = new FileWriter(exportFile)) {
-            GSON.toJson(exportData, writer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // установить горячую клавишу для профиля
-    public static void setProfileHotkey(String profileName, java.util.List<String> keys) {
-        if (keys == null || keys.isEmpty()) {
-            PROFILE_HOTKEYS.remove(profileName);
-        } else {
-            PROFILE_HOTKEYS.put(profileName, new ArrayList<>(keys));
-        }
-        exportProfile(profileName);
-    }
-
-    public static java.util.List<String> getProfileHotkey(String profileName) {
-        return PROFILE_HOTKEYS.get(profileName);
-    }
-
-    // загрузить все профили
-    public static void loadProfiles() {
-        loadProfilesFromDirectory();
-    }
-
-    // сохранить какой профиль сейчас активен
-    public static void saveCurrentProfile(String profile) {
-        currentProfile = profile;
-        File file = getCurrentProfileFile();
-        if (file == null) return;
-
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write(profile != null ? profile : "");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // загрузить текущий профиль
-    public static String loadCurrentProfile() {
-        File file = getCurrentProfileFile();
-        if (file == null || !file.exists()) {
-            return null;
-        }
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            String line = reader.readLine();
-            return (line != null && !line.trim().isEmpty()) ? line.trim() : null;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    public static String getCurrentProfile() {
-        return currentProfile;
-    }
-
-    // открыть папку с профилями
-    public static void openProfilesFolder() {
-        File dir = getProfilesDir();
-        if (dir == null) return;
-
-        try {
-            if (Desktop.isDesktopSupported()) {
-                Desktop.getDesktop().open(dir);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+    private static void openProfileScreenWhenKeyPressed() {
+        while (openProfileScreenKey.wasPressed()) {
+            openConfigScreen(null);
         }
     }
 }

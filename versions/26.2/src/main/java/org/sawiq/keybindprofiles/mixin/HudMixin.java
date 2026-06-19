@@ -5,6 +5,7 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.network.chat.Component;
 import org.sawiq.keybindprofiles.KeyBindProfiles;
 import org.spongepowered.asm.mixin.Final;
@@ -20,13 +21,18 @@ public abstract class HudMixin {
     @Final
     private Minecraft minecraft;
 
+    @Shadow
+    @Final
+    private GuiRenderState guiRenderState;
+
     @Inject(method = "extractRenderState", at = @At("TAIL"))
-    private void keybindprofiles$renderProfileNotification(GuiGraphicsExtractor extractor, DeltaTracker deltaTracker, CallbackInfo ci) {
+    private void keybindprofiles$renderProfileNotification(DeltaTracker deltaTracker, boolean renderHud, boolean renderScreen, CallbackInfo ci) {
         String profileName = KeyBindProfiles.getNotificationText();
         if (profileName == null || minecraft.player == null) {
             return;
         }
 
+        GuiGraphicsExtractor extractor = new GuiGraphicsExtractor(minecraft, guiRenderState, 0, 0);
         Font font = minecraft.font;
         Component message = Component.literal("Профиль \"" + profileName + "\" применён");
 

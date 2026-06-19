@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "org.sawiq.keybindprofiles.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "KeybindsScreenRenderMixin",
+    "HudMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
